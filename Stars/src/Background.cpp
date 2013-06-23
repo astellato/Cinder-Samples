@@ -1,3 +1,25 @@
+/*
+ Copyright (c) 2010-2012, Paul Houx - All rights reserved.
+ This code is intended for use with the Cinder C++ library: http://libcinder.org
+
+ Redistribution and use in source and binary forms, with or without modification, are permitted provided that
+ the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice, this list of conditions and
+	the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and
+	the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include "Background.h"
 #include "Conversions.h"
 
@@ -18,7 +40,7 @@ Background::Background(void)
 	// roughly convert galactic coordinates of map to equatorial coordinates of stars
 	// by rotating the sphere on which the map is projected. The rotation angles were
 	// found using a celestial reference map.
-	mRotation = Vec3f(-60.3f, 81.9f, 22.0f);
+	mRotation = Vec3f(-60.2f, 83.7f, 23.5f);
 }
 
 Background::~Background(void)
@@ -138,11 +160,11 @@ void Background::create()
 
 void Background::setCameraDistance( float distance )
 {
-	static const float minimum = 0.03f;
-	static const float maximum = 0.3f;
+	static const float minimum = 0.01f;
+	static const float maximum = 1.0f;
 
-	if( distance > 1500.0f ) {
-		mAttenuation = ci::lerp<float>( minimum, 0.0f, (distance - 1500.0f) / 250.0f );
+	if( distance > 300.0f ) {
+		mAttenuation = ci::lerp<float>( minimum, 0.0f, (distance - 300.0f) / 200.0f );
 		mAttenuation = math<float>::clamp( mAttenuation, 0.0f, maximum );
 	}
 	else {

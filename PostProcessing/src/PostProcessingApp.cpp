@@ -1,9 +1,14 @@
 /*
- Copyright (C)2011 Paul Houx
- All rights reserved.
+ Copyright (c) 2010-2012, Paul Houx - All rights reserved.
+ This code is intended for use with the Cinder C++ library: http://libcinder.org
 
- Redistribution and use in source and binary forms, with or without modification, 
- are permitted without specific prior written permission.
+ Redistribution and use in source and binary forms, with or without modification, are permitted provided that
+ the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice, this list of conditions and
+	the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and
+	the following disclaimer in the documentation and/or other materials provided with the distribution.
 
  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
@@ -64,20 +69,13 @@ void PostProcessingApp::prepareSettings( Settings *settings )
 void PostProcessingApp::setup()
 {
 	// load test image
-	try { 
-		mImage = gl::Texture( loadImage( loadAsset("test.png") ) );
-	}
-	catch(...){}
+	try { mImage = gl::Texture( loadImage( loadAsset("test.png") ) ); }
+	catch( const std::exception &e ) { console() << "Could not load image: " << e.what() << std::endl; }
 
 	// load post-processing shader
 	//  adapted from a shader by Iñigo Quílez ( http://www.iquilezles.org/ )
-	try {
-		mShader = gl::GlslProg( loadAsset("post_process_vert.glsl"), loadAsset("post_process_frag.glsl") );
-	}
-	catch( gl::GlslProgCompileExc e ) {
-		console() << "Could not compile shader: " << e.what() << std::endl;
-	}
-	catch(...) {}
+	try { mShader = gl::GlslProg( loadAsset("post_process_vert.glsl"), loadAsset("post_process_frag.glsl") ); }
+	catch( const std::exception &e ) { console() << "Could not load & compile shader: " << e.what() << std::endl; quit(); }
 }
 
 void PostProcessingApp::update()
@@ -121,15 +119,8 @@ void PostProcessingApp::keyDown( KeyEvent event )
 		case KeyEvent::KEY_ESCAPE:
 			quit();
 			break;
-		case KeyEvent::KEY_F4:
-			if(event.isAltDown()) {
-				quit();
-			} 
-			break;
-		case KeyEvent::KEY_RETURN:
-			if(event.isAltDown()) {
-				setFullScreen( !isFullScreen() );
-			}
+		case KeyEvent::KEY_f:
+			setFullScreen( !isFullScreen() );
 			break;
 	}
 }

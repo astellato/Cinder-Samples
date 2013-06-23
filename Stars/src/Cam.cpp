@@ -1,3 +1,25 @@
+/*
+ Copyright (c) 2010-2012, Paul Houx - All rights reserved.
+ This code is intended for use with the Cinder C++ library: http://libcinder.org
+
+ Redistribution and use in source and binary forms, with or without modification, are permitted provided that
+ the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice, this list of conditions and
+	the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and
+	the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include "Cam.h"
 #include "Conversions.h"
 
@@ -17,9 +39,10 @@ const double Cam::DISTANCE_MAX = 1000.0;
 
 Cam::Cam(void)
 {
-	mInitialCam = mCurrentCam = CameraPersp(); 
-	mCurrentCam.setNearClip( 0.01f );
+	mInitialCam = mCurrentCam = CameraStereo(); 
+	mCurrentCam.setNearClip( 0.02f );
 	mCurrentCam.setFarClip( 5000.0f );
+	mCurrentCam.setEyeSeparation( 0.005f );
 
 	mDeltaX = mDeltaY = mDeltaD = 0.0; 
 	mDeltas.clear();
@@ -29,6 +52,9 @@ Cam::Cam(void)
 	mLongitude = 0.0;
 	mDistance = 0.015;
 	mFov = 60.0;
+
+	mTimeDistance = 0.0;
+	mTimeDistanceTarget = 0.0;
 }
 
 void Cam::setup()
@@ -41,21 +67,23 @@ void Cam::update(double elapsed)
 {
 	static const double sqrt2pi = math<double>::sqrt(2.0 * M_PI);
 
+	//
+	mTimeDistance +=  0.1 * Conversions::wrap( mTimeDistanceTarget - mTimeDistance, -0.5, 0.5 );
+
 	if((getElapsedSeconds() - mTimeMouse) > mTimeOut)	// screensaver mode
 	{		
 		// calculate time 
 		double t = getElapsedSeconds();
 
 		// determine distance to the sun (in parsecs)
-		double time = t * 0.005;
-		double t_frac = (time) - math<double>::floor(time);
-		double n = sqrt2pi * t_frac;
-		double f = cos( n * n );
-		double distance = 500.0 - 499.95 * f;
+		double fraction = (mTimeDistance) - math<double>::floor(mTimeDistance);
+		double period = 2.0 * M_PI * math<double>::clamp( fraction * 1.20 - 0.10, 0.0, 1.0 );
+		double f = cos( period );
+		double distance = 100.0 - 99.95 * f;
 
 		// determine where to look
-		double longitude = toDegrees(t * 0.034);
-		double latitude = LATITUDE_LIMIT * sin(t * 0.029);
+		double longitude = t * 360.0 / 300.0;							// go around once every 300 seconds
+		double latitude = LATITUDE_LIMIT * -sin(t * 2.0 * M_PI / 220.0);// go up and down once every 220 seconds
 
 		// determine interpolation factor
 		t = math<double>::clamp( (getElapsedSeconds() - mTimeMouse - mTimeOut) / 100.0, 0.0, 1.0);
@@ -110,10 +138,10 @@ void Cam::update(double elapsed)
 			mDeltaY = 0.0;
 			mDeltaD = 0.0;
 		}
-
-		// adjust field-of-view to 60 degrees
-		//mFov = (1.0f - t) * mFov.value() + t * 60.0f;
 	}
+
+	// focus camera
+	mCurrentCam.setConvergence( math<float>::min( 1.0f, 0.95f * mCurrentCam.getEyePoint().length() ), true );
 }
 
 void Cam::mouseDown( const Vec2i &mousePos )
@@ -148,7 +176,7 @@ void Cam::mouseDrag( const Vec2i &mousePos, bool leftDown, bool middleDown, bool
 		mDeltaD = ( mousePos.x - mInitialMousePos.x ) + ( mousePos.y - mInitialMousePos.y );
 		// adjust distance
 		sensitivity = math<double>::max(0.005, math<double>::log10(mDistance) / math<double>::log10(100.0) * 0.075);
-		mDistance = math<double>::clamp( mDistance.value() + mDeltaD * sensitivity, DISTANCE_MIN, DISTANCE_MAX );
+		mDistance = math<double>::clamp( mDistance.value() - mDeltaD * sensitivity, DISTANCE_MIN, DISTANCE_MAX );
 	}
 
 	mInitialMousePos = mousePos;
@@ -170,12 +198,21 @@ void Cam::mouseUp(  const Vec2i &mousePos  )
 	mDeltaD = avg.z;
 }
 
-void Cam::resize( ResizeEvent event )
+void Cam::resize()
 {
-	mCurrentCam.setAspectRatio(event.getAspectRatio());
+	mCurrentCam.setAspectRatio(getWindowAspectRatio());
 }
 
-const CameraPersp& Cam::getCamera()  
+void Cam::setCurrentCam( const CameraStereo &aCurrentCam ) 
+{ 
+	mCurrentCam = aCurrentCam;
+
+	// update distance and fov
+	mDistance = mCurrentCam.getEyePoint().length();
+	mFov = mCurrentCam.getFov();
+}
+
+const CameraStereo& Cam::getCamera()  
 {
 	// update current camera
 	mCurrentCam.setFov( mFov.value() );
@@ -183,15 +220,6 @@ const CameraPersp& Cam::getCamera()
 	mCurrentCam.setCenterOfInterestPoint( Vec3f::zero() );
 
 	return mCurrentCam;
-}
-
-void Cam::setCurrentCam( const CameraPersp &aCurrentCam ) 
-{ 
-	mCurrentCam = aCurrentCam;
-
-	// update distance and fov
-	mDistance = mCurrentCam.getEyePoint().length();
-	mFov = mCurrentCam.getFov();
 }
 
 Vec3f Cam::getPosition()

@@ -1,9 +1,14 @@
 /*
- Copyright (C)2011 Paul Houx
- All rights reserved.
+ Copyright (c) 2010-2012, Paul Houx - All rights reserved.
+ This code is intended for use with the Cinder C++ library: http://libcinder.org
 
- Redistribution and use in source and binary forms, with or without modification, 
- are permitted without specific prior written permission.
+ Redistribution and use in source and binary forms, with or without modification, are permitted provided that
+ the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice, this list of conditions and
+	the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and
+	the following disclaimer in the documentation and/or other materials provided with the distribution.
 
  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
@@ -232,20 +237,7 @@ void FlickrImageViewerApp::keyDown( KeyEvent event )
 		setFullScreen( !isFullScreen() );
 		break;
 	case KeyEvent::KEY_v:
-            // This doesn't fly on a Mac.
-            /*
-		// check if the swap control extension is available
-		if( WGL_EXT_swap_control ) {
-			// toggle vertical sync
-			bool enabled = (::wglGetSwapIntervalEXT() > 0);
-			::wglSwapIntervalEXT(!enabled);
-			enabled = (::wglGetSwapIntervalEXT() > 0);
-			if(enabled) 
-				console() << "Vertical sync ENABLED." << std::endl;
-			else console() << "Vertical sync DISABLED." << std::endl;
-		} 
-             */
-            gl::enableVerticalSync(gl::isVerticalSyncEnabled());
+		gl::enableVerticalSync( !gl::isVerticalSyncEnabled() );
 		break;
 	}
 }

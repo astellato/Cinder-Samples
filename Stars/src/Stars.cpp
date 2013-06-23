@@ -1,3 +1,25 @@
+/*
+ Copyright (c) 2010-2012, Paul Houx - All rights reserved.
+ This code is intended for use with the Cinder C++ library: http://libcinder.org
+
+ Redistribution and use in source and binary forms, with or without modification, are permitted provided that
+ the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice, this list of conditions and
+	the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and
+	the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include "Stars.h"
 #include "Conversions.h"
 
@@ -12,6 +34,7 @@ using namespace ci::app;
 using namespace std;
 
 Stars::Stars(void)
+	: mAspectRatio(1.0f)
 {
 }
 
@@ -21,6 +44,15 @@ Stars::~Stars(void)
 
 void Stars::setup()
 {	
+	// point sprite sizes differ between ATI/AMD and NVIDIA GPU's,
+	// ATI's are twice as large and have to be scaled down
+	std::string vendor = std::string( (char*) glGetString( GL_VENDOR ) );
+
+	if( vendor == "ATI Technologies Inc." )
+		mScale = 0.5f;
+	else
+		mScale = 1.0f;
+
 	// load shader and point sprite texture
 	try { mShader = gl::GlslProg( loadAsset("shaders/stars_vert.glsl"), loadAsset("shaders/stars_frag.glsl") ); }
 	catch( const std::exception &e ) { console() << "Could not load & compile shader: " << e.what() << std::endl; }	
@@ -54,6 +86,13 @@ void Stars::draw()
 	gl::disableAlphaBlending();
 }
 
+void Stars::clear()
+{
+	mVertices.clear();
+	mTexcoords.clear();
+	mColors.clear();
+}
+
 void Stars::enablePointSprites()
 {
 	// store current OpenGL state
@@ -73,6 +112,8 @@ void Stars::enablePointSprites()
 	mShader.uniform("tex0", 0);
 	mShader.uniform("tex1", 1);
 	mShader.uniform("time", (float) getElapsedSeconds() );
+	mShader.uniform("aspect", mAspectRatio);
+	mShader.uniform("scale", mScale);
 }
 
 void Stars::disablePointSprites()
@@ -145,9 +186,7 @@ void Stars::load(DataSourceRef source)
 	lookup[48] = Conversions::toColorA(0xffff5200);
 
 	// create empty buffers for the data
-	std::vector< Vec3f > vertices;
-	std::vector< Vec2f > texcoords;
-	std::vector< Color > colors;
+	clear();
 
 	// load the star database
 	std::string	stars = loadString( source );
@@ -190,41 +229,91 @@ void Stars::load(DataSourceRef source)
 			double delta = toRadians( dec );
 
 			// convert to world (universe) coordinates
-			vertices.push_back( distance * Vec3f((float) (sin(alpha) * cos(delta)), (float) sin(delta), (float) (cos(alpha) * cos(delta))) );
+			mVertices.push_back( distance * Vec3f((float) (sin(alpha) * cos(delta)), (float) sin(delta), (float) (cos(alpha) * cos(delta))) );
 			// put extra data (absolute magnitude and distance to Earth) in texture coordinates
-			texcoords.push_back( Vec2f( (float) abs_mag, (float) distance) );
+			mTexcoords.push_back( Vec2f( (float) abs_mag, (float) distance) );
 			// put color in color attribute
-			colors.push_back( color );
+			mColors.push_back( color );
 		}
 		catch(...) {
 			// some of the data was invalid, ignore 
 			continue;
 		}
-		
-#ifdef _DEBUG
-		// only process the 4500 brightest stars (faster loading)
-		if(vertices.size() >= 4500) break;
-#endif
 	}
 
 	// create VboMesh
+	createMesh();
+}
+
+void Stars::read(DataSourceRef source)
+{
+	IStreamRef in = source->createStream();
+	
+	clear();
+
+	uint8_t versionNumber;
+	in->read( &versionNumber );
+	
+	uint32_t numVertices, numTexcoords, numColors;
+	in->readLittle( &numVertices );
+	in->readLittle( &numTexcoords );
+	in->readLittle( &numColors );
+	
+	for( size_t idx = 0; idx < numVertices; ++idx ) {
+		Vec3f v;
+		in->readLittle( &v.x ); in->readLittle( &v.y ); in->readLittle( &v.z );
+		mVertices.push_back( v );
+	}
+
+	for( size_t idx = 0; idx < numTexcoords; ++idx ) {
+		Vec2f v;
+		in->readLittle( &v.x ); in->readLittle( &v.y );
+		mTexcoords.push_back( v );
+	}
+
+	for( size_t idx = 0; idx < numColors; ++idx ) {
+		Color v;
+		in->readLittle( &v.r ); in->readLittle( &v.g ); in->readLittle( &v.b );
+		mColors.push_back( v );
+	}
+
+	// create VboMesh
+	createMesh();
+}
+
+void Stars::write(DataTargetRef target)
+{
+	OStreamRef out = target->getStream();
+	
+	const uint8_t versionNumber = 1;
+	out->write( versionNumber );
+	
+	out->writeLittle( static_cast<uint32_t>( mVertices.size() ) );
+	out->writeLittle( static_cast<uint32_t>( mTexcoords.size() ) );
+	out->writeLittle( static_cast<uint32_t>( mColors.size() ) );
+	
+	for( vector<Vec3f>::const_iterator it = mVertices.begin(); it != mVertices.end(); ++it ) {
+		out->writeLittle( it->x ); out->writeLittle( it->y ); out->writeLittle( it->z );
+	}
+
+	for( vector<Vec2f>::const_iterator it = mTexcoords.begin(); it != mTexcoords.end(); ++it ) {
+		out->writeLittle( it->x ); out->writeLittle( it->y );
+	}
+
+	for( vector<Color>::const_iterator it = mColors.begin(); it != mColors.end(); ++it ) {
+		out->writeLittle( it->r ); out->writeLittle( it->g ); out->writeLittle( it->b );
+	}
+}
+
+void Stars::createMesh()
+{
 	gl::VboMesh::Layout layout;
 	layout.setStaticPositions();
 	layout.setStaticTexCoords2d();
 	layout.setStaticColorsRGB();
 
-	mVboMesh = gl::VboMesh(vertices.size(), 0, layout, GL_POINTS);
-	mVboMesh.bufferPositions( &(vertices.front()), vertices.size() );
-	mVboMesh.bufferTexCoords2d( 0, texcoords );
-	mVboMesh.bufferColorsRGB( colors );
-}
-
-void Stars::read(DataSourceRef source)
-{
-	// TODO
-}
-
-void Stars::write(DataTargetRef target)
-{
-	// TODO
+	mVboMesh = gl::VboMesh(mVertices.size(), 0, layout, GL_POINTS);
+	mVboMesh.bufferPositions( &(mVertices.front()), mVertices.size() );
+	mVboMesh.bufferTexCoords2d( 0, mTexcoords );
+	mVboMesh.bufferColorsRGB( mColors );
 }
